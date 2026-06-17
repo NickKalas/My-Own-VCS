@@ -1,3 +1,4 @@
+# Import all the needed libraries
 import hashlib
 import zlib
 import os
@@ -5,29 +6,42 @@ import sqlite3
 import datetime
 import argparse
 from pathlib import Path
-# Import the 2 update functions I will need from the database.py file
+# Import the 2 update functions from the database.py file
 from database import update_1st_table, update_2nd_table
 
+# ANSI Escape Codes for terminal coloring
+GREEN = "\033[92m"
+YELLOW = "\033[93m"
+RED = "\033[91m"
+RESET = "\033[0m"
+
+# This function is loading the .ignore file IF it exists
 def load_the_ignore_files() -> list:
     ignore = []
-    with open(".ignore", "r") as ign:
-        for line in ign:
-            cleaned_line = line.strip()
-            if cleaned_line:
-                ignore.append(cleaned_line)
+    try:
+        with open(".ignore", "r") as ign:
+            for line in ign:
+                cleaned_line = line.strip()
+                if cleaned_line:
+                    ignore.append(cleaned_line)
+    except FileNotFoundError:
+        # Fallback if .ignore doesn't exist yet
+        pass
     return ignore  
+# Save the list of files we want to ignore because we will need it later on
 ignore = load_the_ignore_files()
+DATABASE_FILE = "database.db" # This variable is just to avoid hardcoding the database name when creating a connection
 
 def stage_file(file_path: str) -> str:
     try:
         with open(file_path, "rb") as f:
             content = f.read()
-
+        # After we read the binary data of the file we hash the info and we compress the data for storage efficiency
         hash_object = hashlib.sha1(content)
         hex_digest = hash_object.hexdigest()
 
         compressed_data = zlib.compress(content)
-
+        # We update the 1st table with the information we got
         update_1st_table(hex_digest, compressed_data)
         return hex_digest
 
@@ -41,11 +55,12 @@ def scan_directory(dir_path: str, root_tree_hash: str = None) -> str:
     try:
         entries = []
         for item in os.scandir(dir_path):
+            # Get some needed file information (Absolute path, relative path, item_name and also the extension)
             abs_path = os.path.abspath(item.path)
             relative_path = os.path.relpath(abs_path, project_root)
             item_name = os.path.basename(relative_path)
             _, item_ext = os.path.splitext(relative_path)
-            
+            # This if statement makes sure we do ignore all the wanted files + database and hidden files
             if item_name.startswith('.') or item_ext == ".db" or item_name in ignore:
                 continue
             
@@ -56,7 +71,7 @@ def scan_directory(dir_path: str, root_tree_hash: str = None) -> str:
             elif item.is_dir():
                 sub_tree_hash = scan_directory(relative_path, root_tree_hash)
                 entries.append(("tree", relative_path, sub_tree_hash))
-        
+        # We sort the entries to avoid any system reading order problems -> Go into the README.md to learn more
         entries.sort()
         
         manifesto_lines = [f"{t} {p} {h}" for t, p, h in entries]
@@ -77,21 +92,18 @@ def scan_directory(dir_path: str, root_tree_hash: str = None) -> str:
         print(f"An error occurred: {e}")
         quit()
 
-def create_commit_hash(tree_hash: str, parent_hash, message: str,time: str) -> str:
+def create_commit_hash(tree_hash: str, parent_hash, message: str, time: str) -> str:
     metadata = f"tree: {tree_hash} | parent: {parent_hash} | message: {message} | time: {time}"
     commit_hash = hashlib.sha1(metadata.encode('utf-8')).hexdigest()
-    
     return commit_hash
+
 def get_latest_commit_hash():
     conn = sqlite3.connect("database.db")
     cursor = conn.cursor()
     
     sql_command = "SELECT hash FROM commits ORDER BY timestamp DESC LIMIT 1;"
-    
     cursor.execute(sql_command)
-    
     result = cursor.fetchone()
-    
     conn.close() 
 
     if result is not None:
@@ -101,11 +113,10 @@ def get_latest_commit_hash():
 
     return parent_hash
 
+# This function just uses already built functions to get data and store them in the database
 def create_commit(message: str, folder_path: str) -> None:
     tree_hash = scan_directory(folder_path)
-    
     parent_hash = get_latest_commit_hash()
-    
     current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     commit_hash = create_commit_hash(tree_hash, parent_hash, message, current_time)
@@ -125,6 +136,7 @@ def create_commit(message: str, folder_path: str) -> None:
     print(f"  Commit Hash: {commit_hash}")
     print(f"  Parent Hash: {parent_hash}")
 
+# This function 
 def get_tracked_files(commit_hash):
     conn = sqlite3.connect('database.db')
     cursor = conn.cursor()
@@ -132,14 +144,12 @@ def get_tracked_files(commit_hash):
     SELECT te.file_path, te.blob_hash 
     FROM tree_entries te
     JOIN commits c ON te.tree_hash = c.tree_hash
-    WHERE c.hash = (
-        SELECT hash FROM commits ORDER BY timestamp DESC LIMIT 1
-    );
-"""
-    cursor.execute(query)
+    WHERE c.hash = ?;
+    """
+    cursor.execute(query, (commit_hash,))
     result = cursor.fetchall()
-
     conn.close()
+    
     return dict(result)
 
 def get_live_files(dir_path: str) -> dict:
@@ -151,7 +161,7 @@ def get_live_files(dir_path: str) -> dict:
         
         for file in files:
             _, file_ext = os.path.splitext(file)
-            if file.startswith('.') or file_ext == ".db" or file in ignore :
+            if file.startswith('.') or file_ext == ".db" or file in ignore:
                 continue
                 
             abs_path = os.path.abspath(os.path.join(root, file))
@@ -194,33 +204,30 @@ def vcs_status(folder_path: str) -> None:
     print("\n--- PROJECT STATUS ---")
     
     if modified:
-        print("\n🟡 Modified files:")
+        print(f"\n{YELLOW}🟡 Modified files:{RESET}")
         for file in modified:
-            print(f"  modified:   {file}")
+            print(f"  {YELLOW}modified:   {file}{RESET}")
             
     if untracked:
-        print("\n🟢 Untracked files (New):")
+        print(f"\n{GREEN}🟢 Untracked files (New):{RESET}")
         for file in untracked:
-            print(f"  untracked:  {file}")
+            print(f"  {GREEN}untracked:  {file}{RESET}")
             
     if deleted:
-        print("\n🔴 Deleted files:")
+        print(f"\n{RED}🔴 Deleted files:{RESET}")
         for file in deleted:
-            print(f"  deleted:    {file}")
+            print(f"  {RED}deleted:    {file}{RESET}")
             
     if not modified and not untracked and not deleted:
-        print("\nNothing changed. Working tree completely clean!")
+        print(f"\n{GREEN}Nothing changed. Working tree completely clean!{RESET}")
     print("----------------------\n")
 
 def vcs_log() -> None:
     conn = sqlite3.connect("database.db")
     cursor = conn.cursor()
     
-    # 1. One single query to grab everything we need
     query = "SELECT hash, timestamp, message FROM commits ORDER BY timestamp DESC;"
     cursor.execute(query)
-    
-    # fetchall() gives us a list of tuples like: [('hash1', 'date1', 'msg1'), ('hash2', 'date2', 'msg2')]
     all_commits = cursor.fetchall()
     conn.close()
     
@@ -229,11 +236,6 @@ def vcs_log() -> None:
         return
 
     print(f"\n--- COMMIT LOG ({len(all_commits)} commits) ---")
-    
-    # 2. Loop through the results to print them cleanly
-    # (Using ANSI color coding constants to match your status command style!)
-    YELLOW = "\033[93m"
-    RESET = "\033[0m"
     
     for row in all_commits:
         commit_hash = row[0]
@@ -245,8 +247,70 @@ def vcs_log() -> None:
         print(f"Message: {message}")
         print("-" * 50)
 
+# ──────────────────────────────────────────────────────────────
+# NEWLY ADDED TIME TRAVEL FUNCTIONS (PHASE 2 WORKPLACE)
+# ──────────────────────────────────────────────────────────────
+
+def get_files_from_commit(commit_hash: str) -> dict:
+    conn = sqlite3.connect("database.db")
+    cursor = conn.cursor()
+    query = """
+        SELECT te.file_path, te.blob_hash 
+        FROM tree_entries te
+        JOIN commits c ON te.tree_hash = c.tree_hash
+        WHERE c.hash = ?;
+    """
+    cursor.execute(query, (commit_hash,))
+    rows = cursor.fetchall()
+    conn.close()
+    return dict(rows)
+
+def get_compressed_blob(blob_hash: str) -> bytes:
+    conn = sqlite3.connect("database.db")
+    cursor = conn.cursor()
+    # Note: ensure column and table names line up exactly with database.py schemas
+    query = "SELECT data FROM blobs WHERE hash = ?;" 
+    cursor.execute(query, (blob_hash,))
+    result = cursor.fetchone()
+    conn.close()
+    return result[0] if result else None
+
+def vcs_checkout(commit_hash: str) -> None:
+    file_map = get_files_from_commit(commit_hash)
+    
+    if not file_map:
+        print(f"{RED}❌ Error: Commit hash '{commit_hash}' not found or contains no tracked files.{RESET}")
+        return
+        
+    print(f"⏳ Time traveling to commit {commit_hash[:8]}...")
+    
+    for file_path, blob_hash in file_map.items():
+        compressed_data = get_compressed_blob(blob_hash)
+        if compressed_data is None:
+            print(f"{YELLOW}⚠️ Warning: Missing blob data for {file_path}{RESET}")
+            continue
+            
+        original_content = zlib.decompress(compressed_data)
+        
+        # Verify subfolders are generated recursively before writing contents
+        file_dir = os.path.dirname(file_path)
+        if file_dir:
+            os.makedirs(file_dir, exist_ok=True)
+            
+        with open(file_path, "wb") as f:
+            f.write(original_content)
+            
+    print(f"{GREEN}✅ Checkout successful! Working environment restored.{RESET}")
+
+# ──────────────────────────────────────────────────────────────
+# MAIN CLI DRIVER INTERFACE
+# ──────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    # Force Windows environments to load terminal formatting safely
+    if os.name == 'nt':
+        os.system('color')
+
     parser = argparse.ArgumentParser(
         description="MyOwnGit - A custom Version Control System built from scratch."
     )
@@ -263,19 +327,30 @@ if __name__ == "__main__":
         metavar="MESSAGE", 
         help="Record a new snapshot of the project layout with a descriptive message."
     )
+    
     parser.add_argument(
         "--log",
+        action="store_true", # Changed to store_true so running it doesn't prompt an argument crash
         help="Show your past activity/past commits"
     )
+
+    parser.add_argument(
+        "--checkout",
+        type=str,
+        metavar="COMMIT_HASH",
+        help="Time travel your workspace files to match a distinct historical commit hash snapshot."
+    )
+
     args = parser.parse_args()
     folder_path = Path(".")
 
     if args.status:
         vcs_status(folder_path)
-        
     elif args.commit:
         create_commit(args.commit, folder_path)
     elif args.log:
         vcs_log()
+    elif args.checkout:
+        vcs_checkout(args.checkout)
     else:
         parser.print_help()
