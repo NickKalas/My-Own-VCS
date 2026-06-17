@@ -94,6 +94,6 @@ The engine natively skips all underlying hidden files, system files, and databas
 Plaintext
 
 # Example .ignore structure
-secret_keys.txt
-node_modules
+secret_keys.txt\n
+node_modules\n
 dist
