@@ -98,7 +98,7 @@ def create_commit_hash(tree_hash: str, parent_hash, message: str, time: str) -> 
     return commit_hash
 
 def get_latest_commit_hash():
-    conn = sqlite3.connect("database.db")
+    conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
     
     sql_command = "SELECT hash FROM commits ORDER BY timestamp DESC LIMIT 1;"
@@ -121,7 +121,7 @@ def create_commit(message: str, folder_path: str) -> None:
     
     commit_hash = create_commit_hash(tree_hash, parent_hash, message, current_time)
     
-    conn = sqlite3.connect("database.db")
+    conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
     
     cursor.execute("""
@@ -138,7 +138,7 @@ def create_commit(message: str, folder_path: str) -> None:
 
 # This function links/bridges 2 sql tables so that we can pull the information we need about the files 
 def get_tracked_files(commit_hash):
-    conn = sqlite3.connect('database.db')
+    conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
     query = """
     SELECT te.file_path, te.blob_hash 
@@ -226,7 +226,7 @@ def vcs_status(folder_path: str) -> None:
 
 # We go inside our database and pull information about all the past commits (Date, commit_hash and message)
 def vcs_log() -> None:
-    conn = sqlite3.connect("database.db")
+    conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
     
     query = "SELECT hash, timestamp, message FROM commits ORDER BY timestamp DESC;"
@@ -252,7 +252,7 @@ def vcs_log() -> None:
 
 # From this function we get the "blueprint" that your workspace had when you hit the commit command
 def get_files_from_commit(commit_hash: str) -> dict:
-    conn = sqlite3.connect("database.db")
+    conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
     query = """
         SELECT te.file_path, te.blob_hash 
@@ -267,7 +267,7 @@ def get_files_from_commit(commit_hash: str) -> dict:
 
 # Here we get the file <<blueprint>>, the hash and the compressed data
 def get_compressed_blob(hash: str) -> bytes:
-    conn = sqlite3.connect("database.db")
+    conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
     query = "SELECT compressed_data FROM blobs WHERE hash = ?;" 
     cursor.execute(query, (hash,))
