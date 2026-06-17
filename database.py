@@ -63,14 +63,3 @@ def update_2nd_table(tree_hash, file_path, blob_hash):
     conn.commit()
     conn.close()
 
-def update_3rd_table(hash, parent_path, tree_hash, message):
-    conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-
-    cursor.execute("""
-    INSERT OR IGNORE INTO commits (hash, parent_hash, tree_hash, message)
-    VALUES (?,?,?,?)
-    """, (hash, parent_path, tree_hash, message))
-
-    conn.commit()
-    conn.close()

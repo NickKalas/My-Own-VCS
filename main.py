@@ -3,8 +3,11 @@ import zlib
 import os
 import sqlite3
 import datetime
+import argparse
 from pathlib import Path
+# Import the 2 update functions I will need from the database.py file
 from database import update_1st_table, update_2nd_table
+
 def load_the_ignore_files() -> list:
     ignore = []
     with open(".ignore", "r") as ign:
@@ -136,8 +139,6 @@ def get_tracked_files(commit_hash):
     result = cursor.fetchall()
 
     conn.close()
-    print(result)
-
     return dict(result)
 
 def get_live_files(dir_path: str) -> dict:
@@ -211,5 +212,31 @@ def vcs_status(folder_path: str) -> None:
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="MyOwnGit - A custom Version Control System built from scratch."
+    )
+
+    parser.add_argument(
+        "--status", 
+        action="store_true", 
+        help="Show the working tree status (Modified, Untracked, and Deleted files)."
+    )
+
+    parser.add_argument(
+        "--commit", 
+        type=str, 
+        metavar="MESSAGE", 
+        help="Record a new snapshot of the project layout with a descriptive message."
+    )
+
+    args = parser.parse_args()
     folder_path = Path(".")
-    vcs_status(folder_path)
+
+    if args.status:
+        vcs_status(folder_path)
+        
+    elif args.commit:
+        create_commit(args.commit, folder_path)
+        
+    else:
+        parser.print_help()
