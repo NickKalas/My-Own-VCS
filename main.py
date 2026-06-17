@@ -41,11 +41,12 @@ def scan_directory(dir_path: str, root_tree_hash: str = None) -> str:
     try:
         entries = []
         for item in os.scandir(dir_path):
-            abs_path = os.path.abspath(Path(item))
+            abs_path = os.path.abspath(item.path)
             relative_path = os.path.relpath(abs_path, project_root)
             item_name = os.path.basename(relative_path)
-
-            if item_name.startswith('.') or item_name in ignore:
+            _, item_ext = os.path.splitext(relative_path)
+            
+            if item_name.startswith('.') or item_ext == ".db" or item_name in ignore:
                 continue
             
             elif item.is_file():
@@ -146,10 +147,11 @@ def get_live_files(dir_path: str) -> dict:
     live_files = {}
     
     for root, dirs, files in os.walk(dir_path):
-        dirs[:] = [d for d in dirs if d not in ignore and not d.startswith('.')]
+        dirs[:] = [d for d in dirs if d not in ignore and not d.startswith('.')]   
         
         for file in files:
-            if file.startswith('.') or file in ignore:
+            _, file_ext = os.path.splitext(file)
+            if file.startswith('.') or file_ext == ".db" or file in ignore :
                 continue
                 
             abs_path = os.path.abspath(os.path.join(root, file))
@@ -210,6 +212,39 @@ def vcs_status(folder_path: str) -> None:
         print("\nNothing changed. Working tree completely clean!")
     print("----------------------\n")
 
+def vcs_log() -> None:
+    conn = sqlite3.connect("database.db")
+    cursor = conn.cursor()
+    
+    # 1. One single query to grab everything we need
+    query = "SELECT hash, timestamp, message FROM commits ORDER BY timestamp DESC;"
+    cursor.execute(query)
+    
+    # fetchall() gives us a list of tuples like: [('hash1', 'date1', 'msg1'), ('hash2', 'date2', 'msg2')]
+    all_commits = cursor.fetchall()
+    conn.close()
+    
+    if not all_commits:
+        print("\n No commits found. Create one using --commit!")
+        return
+
+    print(f"\n--- COMMIT LOG ({len(all_commits)} commits) ---")
+    
+    # 2. Loop through the results to print them cleanly
+    # (Using ANSI color coding constants to match your status command style!)
+    YELLOW = "\033[93m"
+    RESET = "\033[0m"
+    
+    for row in all_commits:
+        commit_hash = row[0]
+        date = row[1]
+        message = row[2]
+        
+        print(f"\n{YELLOW}Commit {commit_hash}{RESET}")
+        print(f"Date:    {date}")
+        print(f"Message: {message}")
+        print("-" * 50)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -228,7 +263,10 @@ if __name__ == "__main__":
         metavar="MESSAGE", 
         help="Record a new snapshot of the project layout with a descriptive message."
     )
-
+    parser.add_argument(
+        "--log",
+        help="Show your past activity/past commits"
+    )
     args = parser.parse_args()
     folder_path = Path(".")
 
@@ -237,6 +275,7 @@ if __name__ == "__main__":
         
     elif args.commit:
         create_commit(args.commit, folder_path)
-        
+    elif args.log:
+        vcs_log()
     else:
         parser.print_help()
