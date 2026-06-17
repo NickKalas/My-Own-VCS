@@ -303,6 +303,25 @@ def vcs_checkout(commit_hash: str) -> None:
             
     print(f"{GREEN}Checkout successful! Working environment restored.{RESET}")
 
+# This function allows the user to completly start over by deleting the database file 
+def vcs_clear_database() -> None:
+    print(f"{RED}⚠️ WARNING: This will completely wipe your commit history, tree records, and compressed blobs!{RESET}")
+    print(f"{RED}This action is irreversible.{RESET}")
+    
+    confirm = input("\nAre you absolutely sure you want to proceed? (type 'yes' to confirm): ").strip().lower()
+    
+    if confirm == 'yes':
+        try:
+            if os.path.exists("database.db"):
+                os.remove("database.db")
+                print(f"{GREEN}🗑️ database.db successfully deleted and wiped clean!{RESET}")
+            else:
+                print("No database file found to clear.")
+        except Exception as e:
+            print(f"An error occurred while trying to clear the database: {e}")
+    else:
+        print(f"\n{GREEN}Wipe cancelled. Your history is safe!{RESET}")
+
 if __name__ == "__main__":
     # Force Windows environments to load terminal formatting safely
     if os.name == 'nt':
@@ -337,6 +356,11 @@ if __name__ == "__main__":
         metavar="COMMIT_HASH",
         help="Time travel your workspace files to match a distinct historical commit hash snapshot."
     )
+    parser.add_argument(
+        "--clear",
+        action="store_true",
+        help="DANGEROUS: Completely wipes your database and clears all version history."
+    )
 
     args = parser.parse_args()
     folder_path = Path(".")
@@ -349,5 +373,7 @@ if __name__ == "__main__":
         vcs_log()
     elif args.checkout:
         vcs_checkout(args.checkout)
+    elif args.clear:
+        vcs_clear_database()
     else:
         parser.print_help()
