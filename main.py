@@ -136,7 +136,7 @@ def create_commit(message: str, folder_path: str) -> None:
     print(f"  Commit Hash: {commit_hash}")
     print(f"  Parent Hash: {parent_hash}")
 
-# This function 
+# This function links/bridges 2 sql tables so that we can pull the information we need about the files 
 def get_tracked_files(commit_hash):
     conn = sqlite3.connect('database.db')
     cursor = conn.cursor()
@@ -149,7 +149,7 @@ def get_tracked_files(commit_hash):
     cursor.execute(query, (commit_hash,))
     result = cursor.fetchall()
     conn.close()
-    
+
     return dict(result)
 
 def get_live_files(dir_path: str) -> dict:
