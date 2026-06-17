@@ -152,6 +152,7 @@ def get_tracked_files(commit_hash):
 
     return dict(result)
 
+# Function that will allow us later to make the comparisons we need to declare whether a file is Untracked, Modified or Deleted -> Go to the README for more information
 def get_live_files(dir_path: str) -> dict:
     project_root = os.path.abspath(".")
     live_files = {}
@@ -177,6 +178,7 @@ def get_live_files(dir_path: str) -> dict:
                 
     return live_files
 
+# We make the comparisons between the hashes of the files and add the files to the correct list
 def vcs_status(folder_path: str) -> None:
     latest_commit = get_latest_commit_hash()
     
@@ -222,6 +224,7 @@ def vcs_status(folder_path: str) -> None:
         print(f"\n{GREEN}Nothing changed. Working tree completely clean!{RESET}")
     print("----------------------\n")
 
+# We go inside our database and pull information about all the past commits (Date, commit_hash and message)
 def vcs_log() -> None:
     conn = sqlite3.connect("database.db")
     cursor = conn.cursor()
@@ -247,10 +250,7 @@ def vcs_log() -> None:
         print(f"Message: {message}")
         print("-" * 50)
 
-# ──────────────────────────────────────────────────────────────
-# NEWLY ADDED TIME TRAVEL FUNCTIONS (PHASE 2 WORKPLACE)
-# ──────────────────────────────────────────────────────────────
-
+# From this function we get the "blueprint" that your workspace had when you hit the commit command
 def get_files_from_commit(commit_hash: str) -> dict:
     conn = sqlite3.connect("database.db")
     cursor = conn.cursor()
@@ -265,29 +265,30 @@ def get_files_from_commit(commit_hash: str) -> dict:
     conn.close()
     return dict(rows)
 
-def get_compressed_blob(blob_hash: str) -> bytes:
+# Here we get the file <<blueprint>>, the hash and the compressed data
+def get_compressed_blob(hash: str) -> bytes:
     conn = sqlite3.connect("database.db")
     cursor = conn.cursor()
-    # Note: ensure column and table names line up exactly with database.py schemas
-    query = "SELECT data FROM blobs WHERE hash = ?;" 
-    cursor.execute(query, (blob_hash,))
+    query = "SELECT compressed_data FROM blobs WHERE hash = ?;" 
+    cursor.execute(query, (hash,))
     result = cursor.fetchone()
     conn.close()
     return result[0] if result else None
 
+# Now that we have everything we need, we just simply "connect" everything together to make the final checkout function
 def vcs_checkout(commit_hash: str) -> None:
     file_map = get_files_from_commit(commit_hash)
     
     if not file_map:
-        print(f"{RED}❌ Error: Commit hash '{commit_hash}' not found or contains no tracked files.{RESET}")
+        print(f"{RED}Error: Commit hash '{commit_hash}' not found or contains no tracked files.{RESET}")
         return
         
-    print(f"⏳ Time traveling to commit {commit_hash[:8]}...")
+    print(f"Time traveling to commit {commit_hash[:8]}...")
     
     for file_path, blob_hash in file_map.items():
         compressed_data = get_compressed_blob(blob_hash)
         if compressed_data is None:
-            print(f"{YELLOW}⚠️ Warning: Missing blob data for {file_path}{RESET}")
+            print(f"{YELLOW}Warning: Missing blob data for {file_path}{RESET}")
             continue
             
         original_content = zlib.decompress(compressed_data)
@@ -300,11 +301,7 @@ def vcs_checkout(commit_hash: str) -> None:
         with open(file_path, "wb") as f:
             f.write(original_content)
             
-    print(f"{GREEN}✅ Checkout successful! Working environment restored.{RESET}")
-
-# ──────────────────────────────────────────────────────────────
-# MAIN CLI DRIVER INTERFACE
-# ──────────────────────────────────────────────────────────────
+    print(f"{GREEN}Checkout successful! Working environment restored.{RESET}")
 
 if __name__ == "__main__":
     # Force Windows environments to load terminal formatting safely
@@ -330,7 +327,7 @@ if __name__ == "__main__":
     
     parser.add_argument(
         "--log",
-        action="store_true", # Changed to store_true so running it doesn't prompt an argument crash
+        action="store_true",
         help="Show your past activity/past commits"
     )
 
